@@ -271,10 +271,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dragArea.heightAnchor.constraint(equalToConstant: headerHeight),
         ])
 
-        let title = NSTextField(labelWithString: "ClipStack")
+        let title = LabelView.make("ClipStack")
         title.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         title.textColor = .secondaryLabelColor
-        title.translatesAutoresizingMaskIntoConstraints = false
 
         searchIcon = NSImageView()
         searchIcon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
@@ -869,10 +868,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func updateStatusIcon() {
         guard let button = statusItem.button else { return }
-        let name = Prefs.shared.isPaused ? "doc.on.clipboard" : "doc.on.clipboard.fill"
-        button.image = NSImage(systemSymbolName: name, accessibilityDescription: "ClipStack")
-        button.image?.isTemplate = true
+        if let img = NSImage(named: "StatusIcon") {
+            img.size = NSSize(width: 22, height: 22)
+            img.isTemplate = false
+            let paused = Prefs.shared.isPaused
+            button.image = paused ? dimmedStatusIcon(img) : img
+        } else {
+            let name = Prefs.shared.isPaused ? "doc.on.clipboard" : "doc.on.clipboard.fill"
+            button.image = NSImage(systemSymbolName: name, accessibilityDescription: "ClipStack")
+            button.image?.isTemplate = true
+        }
         button.toolTip = Prefs.shared.isPaused ? "ClipStack — Paused" : "ClipStack"
+    }
+
+    private func dimmedStatusIcon(_ img: NSImage) -> NSImage {
+        let dimmed = img.copy() as! NSImage
+        dimmed.lockFocus()
+        NSColor.black.withAlphaComponent(0.4).setFill()
+        NSRect(origin: .zero, size: dimmed.size).fill(using: .sourceAtop)
+        dimmed.unlockFocus()
+        return dimmed
     }
 
     // MARK: - Clipboard

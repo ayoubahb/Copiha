@@ -13,6 +13,8 @@
 		AA04 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA04 /* Store.swift */; };
 		AA02 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = FA02 /* Info.plist */; };
 		AA05 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = FA05 /* AppIcon.icns */; };
+		AA06 /* StatusIcon.png in Resources */ = {isa = PBXBuildFile; fileRef = FA06 /* StatusIcon.png */; };
+		AA07 /* StatusIcon@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = FA07 /* StatusIcon@2x.png */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +24,8 @@
 		FA04 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		FA02 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FA05 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
+		FA06 /* StatusIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = StatusIcon.png; sourceTree = "<group>"; };
+		FA07 /* StatusIcon@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "StatusIcon@2x.png"; sourceTree = "<group>"; };
 		FAAPP /* ClipStack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipStack.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -61,6 +65,8 @@
 			children = (
 				FA02 /* Info.plist */,
 				FA05 /* AppIcon.icns */,
+				FA06 /* StatusIcon.png */,
+				FA07 /* StatusIcon@2x.png */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -135,6 +141,8 @@
 			files = (
 				AA02 /* Info.plist in Resources */,
 				AA05 /* AppIcon.icns in Resources */,
+				AA06 /* StatusIcon.png in Resources */,
+				AA07 /* StatusIcon@2x.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
