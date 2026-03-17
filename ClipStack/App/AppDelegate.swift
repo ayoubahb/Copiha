@@ -330,6 +330,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             itemsStack.topAnchor.constraint(equalTo: container.topAnchor),
             itemsStack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             itemsStack.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            itemsStack.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
 
         scrollView = NSScrollView()
@@ -733,12 +734,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if event.type == .leftMouseUp {
                 guard let contentView = self.panel.contentView else { return event }
                 let pointInContent = contentView.convert(event.locationInWindow, from: nil)
-                for view in self.allHoverViews {
-                    let frameInContent = view.convert(view.bounds, to: contentView)
-                    if frameInContent.contains(pointInContent) {
-                        view.onClicked?()
+                var hitView = contentView.hitTest(pointInContent)
+                while let v = hitView {
+                    if let hover = v as? HoverView {
+                        hover.onClicked?()
                         return nil
                     }
+                    hitView = v.superview
                 }
                 return event
             }
@@ -1042,10 +1044,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func scrollToRow(_ index: Int) {
         guard index < allHoverViews.count,
+              allHoverViews[index].debugLabel.hasPrefix("item-"),
+              let clipView = scrollView.contentView as? NSClipView,
               let documentView = scrollView.documentView else { return }
         let view = allHoverViews[index]
-        let frame = view.convert(view.bounds, to: documentView)
-        documentView.scrollToVisible(frame)
+        // Convert row frame into documentView coordinate space
+        let rowFrame = view.convert(view.bounds, to: documentView)
+        let visibleRect = clipView.documentVisibleRect
+        var newOriginY = clipView.bounds.origin.y
+        if rowFrame.maxY > visibleRect.maxY {
+            newOriginY = rowFrame.maxY - visibleRect.height
+        } else if rowFrame.minY < visibleRect.minY {
+            newOriginY = rowFrame.minY
+        }
+        let maxY = max(0, documentView.frame.height - visibleRect.height)
+        newOriginY = min(max(newOriginY, 0), maxY)
+        clipView.scroll(to: NSPoint(x: 0, y: newOriginY))
+        scrollView.reflectScrolledClipView(clipView)
     }
 
     // MARK: - Preview popup
