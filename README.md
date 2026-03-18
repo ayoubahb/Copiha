@@ -43,17 +43,66 @@ xcodebuild -scheme Copiha -configuration Release build
 
 ## Usage
 
+### Keyboard Shortcuts
+
 | Action | Shortcut |
 |---|---|
-| Open Copiha | ⌘⇧V (customizable in Preferences) |
-| Paste item | Click or Enter |
-| Quick paste (first 9) | ⌘1 – ⌘9 |
+| Open Copiha | ⌘⇧V *(customizable in Preferences)* |
+| Paste selected item | Click or ↩ Enter |
+| Quick paste (first 9 items) | ⌘1 – ⌘9 |
 | Navigate list | ↑ / ↓ arrow keys |
 | Search | Just start typing |
-| Delete item | Hover + ⌥⌫ |
-| Clear all | ⌥⇧⌘⌫ |
+| Delete hovered item | ⌥⌫ |
+| Clear all history | ⌥⇧⌘⌫ |
+| Reset panel size | ⌘0 |
 | Preferences | ⌘, |
+| About | ⌘I |
+| Close panel | Escape |
 | Quit | ⌘Q |
+
+---
+
+## Preferences
+
+### General
+| Option | Description |
+|---|---|
+| Launch at login | Start Copiha automatically when you log in |
+| Open hotkey | Customize the global shortcut (default ⌘⇧V) |
+| Search mode | Fuzzy or exact match |
+| Paste automatically | Simulate ⌘V to paste directly after selecting |
+| Paste without formatting | Strip rich text and paste plain text only |
+
+### Storage
+| Option | Description |
+|---|---|
+| Save — Text | Record text copies (enabled by default) |
+| Save — Images | Record image copies |
+| Save — Files | Record file copies |
+| History size | Max number of items to keep (10–5000, default 100) |
+| Sort by | Last copy · Copy count · Alphabetical |
+| Auto-clear after | Never · 1 day · 1 week · 1 month |
+
+### Appearance
+| Option | Description |
+|---|---|
+| Popup at | Open at menu bar icon or at the mouse cursor |
+| Item preview | Show full content preview on hover |
+| Preview delay | How long before the preview appears |
+| Show search field | Toggle the search bar visibility |
+| Show footer | Toggle the footer bar (Clear, Preferences, Quit…) |
+
+### Ignore
+Add apps whose clipboard activity you want Copiha to ignore (e.g. password managers). Copies made in those apps will not be recorded.
+
+### Advanced
+| Option | Description |
+|---|---|
+| Pause monitoring | Stop recording clipboard changes temporarily |
+| Clear history on quit | Wipe history when Copiha exits |
+| Clear clipboard on quit | Clear the system clipboard when Copiha exits |
+| Check for updates | Manually check for a new release on GitHub |
+| Show log in Finder | Open `copiha.log` for bug reporting |
 
 ---
 
