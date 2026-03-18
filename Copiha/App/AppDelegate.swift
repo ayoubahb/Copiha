@@ -6,9 +6,9 @@ import ServiceManagement
 
 private let _logFileURL: URL = {
     let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-        .first!.appendingPathComponent("ClipStack", isDirectory: true)
+        .first!.appendingPathComponent("Copiha", isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    return dir.appendingPathComponent("clipstack.log")
+    return dir.appendingPathComponent("copiha.log")
 }()
 
 /// Always written (Debug + Release). Use for real errors only.
@@ -39,11 +39,11 @@ private func _writeLog(_ text: String) {
     }
 }
 
-func clipStackLogFileURL() -> URL { _logFileURL }
+func copihaLogFileURL() -> URL { _logFileURL }
 
 // GitHub release info
 let kGitHubOwner = "ayoubahb"
-let kGitHubRepo  = "ClipStack"
+let kGitHubRepo  = "Copiha"
 
 // MARK: - KeyablePanel
 
@@ -121,10 +121,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var panelWidth: CGFloat = 500
-    private let rowHeight: CGFloat = 36
+    private var userPanelHeight: CGFloat? = nil  // nil = auto from item count
+    private let defaultVisibleRows: Int = 8
+    private let rowHeight: CGFloat = 30
     private let headerHeight: CGFloat = 44
-    private let footerRowHeight: CGFloat = 34
-    private let footerCount: Int = 4
+    private let footerRowHeight: CGFloat = 24
+    private let footerCount: Int = 5
     private let maxVisibleRows: Int = 12
     private var footerHeight: CGFloat { CGFloat(footerCount) * footerRowHeight }
 
@@ -140,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        log("=== ClipStack launched ===")
+        log("=== Copiha launched ===")
         requestAccessibilityIfNeeded()
         clipboardItems = Store.shared.load()
         applyTTL()
@@ -172,35 +174,154 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let url = URL(string: apiURL) else { return }
         var request = URLRequest(url: url)
         let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-        request.setValue("ClipStack/\(current)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Copiha/\(current)", forHTTPHeaderField: "User-Agent")
         URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
             if let error { logError("Update check failed: \(error)") }
             guard let data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let tag = json["tag_name"] as? String,
-                  let pageURL = json["html_url"] as? String else {
+                  let tag = json["tag_name"] as? String else {
                 if userInitiated {
                     DispatchQueue.main.async { self?.showAlert("Could not check for updates.", info: "Check your internet connection.") }
                 }
                 return
             }
             let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
+            // Find DMG asset URL
+            let dmgURL: String? = (json["assets"] as? [[String: Any]])?.compactMap {
+                ($0["browser_download_url"] as? String)
+            }.first(where: { $0.hasSuffix(".dmg") })
+
             DispatchQueue.main.async {
                 if latest.compare(current, options: .numeric) == .orderedDescending {
                     let alert = NSAlert()
                     alert.messageText = "Update Available — v\(latest)"
-                    alert.informativeText = "You have v\(current). Download the latest version from GitHub."
-                    alert.addButton(withTitle: "Download")
+                    alert.informativeText = "You have v\(current). Copiha will download and install v\(latest) automatically."
+                    alert.addButton(withTitle: "Update Now")
                     alert.addButton(withTitle: "Later")
-                    if alert.runModal() == .alertFirstButtonReturn,
-                       let url = URL(string: pageURL) {
+                    guard alert.runModal() == .alertFirstButtonReturn else { return }
+                    if let dmgURL, let downloadURL = URL(string: dmgURL) {
+                        self?.downloadAndInstallUpdate(from: downloadURL, version: latest)
+                    } else if let pageURL = json["html_url"] as? String, let url = URL(string: pageURL) {
                         NSWorkspace.shared.open(url)
                     }
                 } else if userInitiated {
-                    self?.showAlert("ClipStack is up to date.", info: "You have the latest version (v\(current)).")
+                    self?.showAlert("Copiha is up to date.", info: "You have the latest version (v\(current)).")
                 }
             }
         }.resume()
+    }
+
+    private func downloadAndInstallUpdate(from url: URL, version: String) {
+        // Show progress window
+        let progressWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 100),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        progressWindow.title = "Updating Copiha"
+        progressWindow.center()
+        progressWindow.isReleasedWhenClosed = false
+
+        let label = NSTextField(labelWithString: "Downloading v\(version)…")
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let bar = NSProgressIndicator()
+        bar.style = .bar
+        bar.minValue = 0; bar.maxValue = 1; bar.doubleValue = 0
+        bar.isIndeterminate = false
+        bar.translatesAutoresizingMaskIntoConstraints = false
+
+        let box = NSView()
+        box.translatesAutoresizingMaskIntoConstraints = false
+        box.addSubview(label); box.addSubview(bar)
+        progressWindow.contentView = box
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: box.topAnchor, constant: 20),
+            label.centerXAnchor.constraint(equalTo: box.centerXAnchor),
+            bar.topAnchor.constraint(equalTo: label.bottomAnchor, constant: 12),
+            bar.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 20),
+            bar.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -20),
+            bar.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -20),
+        ])
+        progressWindow.makeKeyAndOrderFront(nil)
+
+        let destURL = FileManager.default.temporaryDirectory.appendingPathComponent("Copiha-\(version).dmg")
+        let task = URLSession.shared.downloadTask(with: url) { [weak progressWindow] tmpURL, _, error in
+            DispatchQueue.main.async {
+                progressWindow?.close()
+                if let error {
+                    logError("Update download failed: \(error)")
+                    self.showAlert("Download failed.", info: error.localizedDescription)
+                    return
+                }
+                guard let tmpURL else { return }
+                do {
+                    if FileManager.default.fileExists(atPath: destURL.path) {
+                        try FileManager.default.removeItem(at: destURL)
+                    }
+                    try FileManager.default.moveItem(at: tmpURL, to: destURL)
+                    self.installUpdate(dmgURL: destURL, version: version)
+                } catch {
+                    logError("Update move failed: \(error)")
+                    self.showAlert("Update failed.", info: error.localizedDescription)
+                }
+            }
+        }
+        task.addObserver(self, forKeyPath: "countOfBytesReceived", options: .new, context: nil)
+        task.addObserver(self, forKeyPath: "countOfBytesExpectedToReceive", options: .new, context: nil)
+        self._updateProgressBar = bar
+        self._updateTask = task
+        task.resume()
+    }
+
+    private var _updateProgressBar: NSProgressIndicator?
+    private var _updateTask: URLSessionDownloadTask?
+
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?,
+                               change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
+        guard let task = _updateTask,
+              task.countOfBytesExpectedToReceive > 0 else { return }
+        let progress = Double(task.countOfBytesReceived) / Double(task.countOfBytesExpectedToReceive)
+        DispatchQueue.main.async { self._updateProgressBar?.doubleValue = progress }
+    }
+
+    private func installUpdate(dmgURL: URL, version: String) {
+        let mountPoint = "/Volumes/Copiha-update-\(version)"
+        let appDest = "/Applications/Copiha.app"
+        let newAppPath = "\(mountPoint)/Copiha.app"
+        let currentAppPath = Bundle.main.bundlePath
+
+        // Mount DMG
+        let mount = Process()
+        mount.launchPath = "/usr/bin/hdiutil"
+        mount.arguments = ["attach", dmgURL.path, "-mountpoint", mountPoint, "-nobrowse", "-quiet"]
+        mount.launch(); mount.waitUntilExit()
+        guard mount.terminationStatus == 0,
+              FileManager.default.fileExists(atPath: newAppPath) else {
+            showAlert("Install failed.", info: "Could not mount the update disk image.")
+            return
+        }
+
+        // Write relaunch script — copies app, detaches DMG, relaunches
+        let relaunchTarget = FileManager.default.fileExists(atPath: appDest) ? appDest : currentAppPath
+        let script = """
+        #!/bin/bash
+        sleep 1
+        rm -rf "\(relaunchTarget)"
+        cp -R "\(newAppPath)" "\(relaunchTarget)"
+        hdiutil detach "\(mountPoint)" -quiet
+        open "\(relaunchTarget)"
+        """
+        let scriptURL = FileManager.default.temporaryDirectory.appendingPathComponent("copiha_update.sh")
+        try? script.write(to: scriptURL, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
+
+        let launcher = Process()
+        launcher.launchPath = "/bin/bash"
+        launcher.arguments = [scriptURL.path]
+        launcher.launch()
+
+        NSApp.terminate(nil)
     }
 
     private func showAlert(_ message: String, info: String) {
@@ -271,7 +392,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dragArea.heightAnchor.constraint(equalToConstant: headerHeight),
         ])
 
-        let title = LabelView.make("ClipStack")
+        let title = LabelView.make("Copiha")
         title.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
         title.textColor = .secondaryLabelColor
 
@@ -381,28 +502,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             topDivider.heightAnchor.constraint(equalToConstant: 1),
         ])
 
-        let footerItems: [(String, String, Selector)] = [
-            ("Clear all",    "⌥⇧⌘⌫", #selector(clearAll)),
-            ("Reset size",   "",       #selector(resetPanelSize)),
-            ("Preferences…", "⌘,",    #selector(openPreferences)),
-            ("Quit",         "⌘Q",    #selector(quitApp)),
+        let footerItems: [(String, String, String, Selector)] = [
+            ("Clear all",    "trash",                  "⌥⇧⌘⌫", #selector(clearAll)),
+            ("Reset size",   "arrow.counterclockwise", "⌘0",    #selector(resetPanelSize)),
+            ("Preferences…", "gear",                  "⌘,",    #selector(openPreferences)),
+            ("About",        "info.circle",            "⌘I",    #selector(showAbout)),
+            ("Quit",         "power",                  "⌘Q",    #selector(quitApp)),
         ]
 
         // Build rows top-to-bottom anchored from topDivider downward
         var topAnchor = topDivider.bottomAnchor
 
-        for (index, (title, shortcut, action)) in footerItems.enumerated() {
+        for (index, (title, symbol, shortcut, action)) in footerItems.enumerated() {
             let row = HoverView()
             row.translatesAutoresizingMaskIntoConstraints = false
+            row.isFooter = true
+
+            let icon = NSImageView()
+            icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            icon.contentTintColor = .secondaryLabelColor
+            icon.translatesAutoresizingMaskIntoConstraints = false
+            icon.setContentHuggingPriority(.required, for: .horizontal)
 
             let label = LabelView.make(title)
-            label.font = NSFont.systemFont(ofSize: 13)
-            label.textColor = .labelColor
+            label.font = NSFont.systemFont(ofSize: 12)
+            label.textColor = .secondaryLabelColor
 
             let hint = LabelView.make(shortcut)
-            hint.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-            hint.textColor = .secondaryLabelColor
+            hint.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+            hint.textColor = .tertiaryLabelColor
 
+            row.addSubview(icon)
             row.addSubview(label)
             row.addSubview(hint)
             parent.addSubview(row)
@@ -412,7 +542,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 row.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
                 row.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
                 row.heightAnchor.constraint(equalToConstant: footerRowHeight),
-                label.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 14),
+                icon.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 14),
+                icon.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: 14),
+                icon.heightAnchor.constraint(equalToConstant: 14),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 7),
                 label.centerYAnchor.constraint(equalTo: row.centerYAnchor),
                 hint.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -14),
                 hint.centerYAnchor.constraint(equalTo: row.centerYAnchor),
@@ -426,21 +560,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             topAnchor = row.bottomAnchor
 
-            // separator between rows (not after last)
-            if index < footerItems.count - 1 {
-                let sep = NSBox()
-                sep.boxType = .separator
-                sep.translatesAutoresizingMaskIntoConstraints = false
-                parent.addSubview(sep)
-                NSLayoutConstraint.activate([
-                    sep.topAnchor.constraint(equalTo: topAnchor),
-                    sep.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 14),
-                    sep.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -14),
-                    sep.heightAnchor.constraint(equalToConstant: 1),
-                ])
-                footerViews.append(sep)
-                topAnchor = sep.bottomAnchor
-            }
+            _ = index // no separators between footer rows
         }
     }
 
@@ -449,6 +569,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildResizeHandle(in parent: NSView) {
         let handle = ResizeHandleView(panel: panel)
         handle.translatesAutoresizingMaskIntoConstraints = false
+        handle.onResized = { [weak self] _, newHeight in
+            self?.userPanelHeight = newHeight
+            self?.panelWidth = self?.panel.frame.width ?? 500
+        }
         parent.addSubview(handle)
         NSLayoutConstraint.activate([
             handle.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
@@ -479,6 +603,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             left.bottomAnchor.constraint(equalTo: parent.bottomAnchor),
             left.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
             left.widthAnchor.constraint(equalToConstant: 6),
+        ])
+
+        // Bottom edge — drag to resize height
+        let bottom = EdgeResizeView(edge: .bottom, panel: panel)
+        bottom.onResized = { [weak self] _, newHeight in self?.userPanelHeight = newHeight }
+        bottom.translatesAutoresizingMaskIntoConstraints = false
+        parent.addSubview(bottom)
+        NSLayoutConstraint.activate([
+            bottom.bottomAnchor.constraint(equalTo: parent.bottomAnchor),
+            bottom.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 6),
+            bottom.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -20),
+            bottom.heightAnchor.constraint(equalToConstant: 6),
         ])
     }
 
@@ -564,10 +700,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func resetPanelSize() {
         log("Reset panel size")
+        userPanelHeight = nil
+        panelWidth = 500
+        resizePanel()
         var frame = panel.frame
-        let newHeight = frame.height
         frame.size.width = panelWidth
-        frame.origin.x = frame.maxX - panelWidth  // keep right edge, shrink left
+        frame.origin.x = frame.maxX - panelWidth
         panel.setFrame(frame, display: true, animate: true)
     }
 
@@ -596,6 +734,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
+    @objc private func showAbout() {
+        hidePanel()
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.1"
+        let alert = NSAlert()
+        alert.messageText = "Copiha"
+        alert.informativeText = "Version \(version)\n\nA lightweight clipboard manager for macOS.\nStores your clipboard history locally — no data ever leaves your Mac.\n\n© 2025 Copiha"
+        alert.icon = NSImage(named: NSImage.applicationIconName)
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "View on GitHub")
+        if alert.runModal() == .alertSecondButtonReturn,
+           let url = URL(string: "https://github.com/\(kGitHubOwner)/\(kGitHubRepo)") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     private func showOnboardingIfNeeded() {
         guard !Prefs.shared.hasSeenOnboarding else { return }
         let controller = OnboardingWindowController()
@@ -614,9 +767,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Resize panel height
 
     private func resizePanel() {
-        let count = min(filteredItems.count, maxVisibleRows)
-        let listH: CGFloat = filteredItems.isEmpty ? rowHeight : CGFloat(count) * rowHeight
-        let totalH = headerHeight + 1 + listH + 1 + footerHeight
+        let minH = headerHeight + 1 + rowHeight + 1 + footerHeight
+        let totalH: CGFloat
+        if let userH = userPanelHeight {
+            totalH = max(userH, minH)
+        } else {
+            let count = min(filteredItems.count, defaultVisibleRows)
+            let listH: CGFloat = filteredItems.isEmpty ? rowHeight : CGFloat(count) * rowHeight
+            totalH = headerHeight + 1 + listH + 1 + footerHeight
+        }
         var frame = panel.frame
         let delta = frame.height - totalH
         frame.size = NSSize(width: frame.width, height: totalH)
@@ -793,6 +952,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.quitApp()
                 return nil
             }
+            // ⌘0 — reset size
+            if event.modifierFlags.contains(.command),
+               event.charactersIgnoringModifiers == "0" {
+                self.resetPanelSize()
+                return nil
+            }
+            // ⌘I — about
+            if event.modifierFlags.contains(.command),
+               event.charactersIgnoringModifiers == "i" {
+                self.showAbout()
+                return nil
+            }
             // ⌥⌫ — delete hovered item
             if event.modifierFlags.contains(.option),
                !event.modifierFlags.contains(.command),
@@ -877,10 +1048,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = paused ? dimmedStatusIcon(img) : img
         } else {
             let name = Prefs.shared.isPaused ? "doc.on.clipboard" : "doc.on.clipboard.fill"
-            button.image = NSImage(systemSymbolName: name, accessibilityDescription: "ClipStack")
+            button.image = NSImage(systemSymbolName: name, accessibilityDescription: "Copiha")
             button.image?.isTemplate = true
         }
-        button.toolTip = Prefs.shared.isPaused ? "ClipStack — Paused" : "ClipStack"
+        button.toolTip = Prefs.shared.isPaused ? "Copiha — Paused" : "Copiha"
     }
 
     private func dimmedStatusIcon(_ img: NSImage) -> NSImage {
@@ -1240,6 +1411,7 @@ final class HoverView: NSView {
     var onClicked: (() -> Void)?
     var debugLabel: String = ""
     var isHovered: Bool = false
+    var isFooter: Bool = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -1247,19 +1419,28 @@ final class HoverView: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    private static let highlightColor = NSColor.systemBlue.withAlphaComponent(0.85)
-    private static let highlightPressedColor = NSColor.systemBlue.withAlphaComponent(0.65)
+    private static let itemHighlight        = NSColor.systemBlue.withAlphaComponent(0.85)
+    private static let itemHighlightPressed = NSColor.systemBlue.withAlphaComponent(0.65)
+    private static let footerHighlight      = NSColor.labelColor.withAlphaComponent(0.1)
+    private static let footerHighlightPressed = NSColor.labelColor.withAlphaComponent(0.18)
 
     func setHighlight(_ on: Bool) {
-        layer?.backgroundColor = on ? Self.highlightColor.cgColor : NSColor.clear.cgColor
-        subviews.compactMap { $0 as? LabelView }.forEach {
-            $0.textColor = on ? .white : .labelColor
+        if isFooter {
+            layer?.backgroundColor = on ? Self.footerHighlight.cgColor : NSColor.clear.cgColor
+            // footer labels keep their color on hover
+        } else {
+            layer?.backgroundColor = on ? Self.itemHighlight.cgColor : NSColor.clear.cgColor
+            subviews.compactMap { $0 as? LabelView }.forEach {
+                $0.textColor = on ? .white : .labelColor
+            }
         }
         needsDisplay = true
     }
 
     override func mouseDown(with event: NSEvent) {
-        layer?.backgroundColor = Self.highlightPressedColor.cgColor
+        layer?.backgroundColor = isFooter
+            ? Self.footerHighlightPressed.cgColor
+            : Self.itemHighlightPressed.cgColor
     }
 }
 
@@ -1280,24 +1461,13 @@ final class ResizeHandleView: NSView {
     private weak var panel: NSPanel?
     private var startLocation: NSPoint = .zero
     private var startFrame: NSRect = .zero
+    var onResized: ((CGFloat, CGFloat) -> Void)?  // (width, height)
 
     init(panel: NSPanel) {
         self.panel = panel
         super.init(frame: .zero)
     }
     required init?(coder: NSCoder) { fatalError() }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.tertiaryLabelColor.setStroke()
-        let path = NSBezierPath()
-        let offsets: [(CGFloat, CGFloat)] = [(14,4),(10,8),(6,12),(10,4),(6,8),(6,4)]
-        for (x, y) in offsets {
-            path.move(to: NSPoint(x: bounds.maxX - x, y: bounds.minY + y))
-            path.line(to: NSPoint(x: bounds.maxX - x + 2, y: bounds.minY + y - 2))
-        }
-        path.lineWidth = 1
-        path.stroke()
-    }
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .crosshair)
@@ -1313,23 +1483,25 @@ final class ResizeHandleView: NSView {
         let current = NSEvent.mouseLocation
         let dx = current.x - startLocation.x
         let dy = current.y - startLocation.y
-        // resize: increase width right, decrease height top (panel grows down from bottom)
         let newWidth  = max(320, startFrame.width + dx)
         let newHeight = max(200, startFrame.height - dy)
-        let newOriginY = startFrame.origin.y + dy
-        panel.setFrame(NSRect(x: startFrame.origin.x, y: newOriginY,
-                              width: newWidth, height: newHeight), display: true)
+        let newY = startFrame.maxY - newHeight
+        panel.setFrame(NSRect(x: startFrame.origin.x, y: newY,
+                              width: newWidth, height: newHeight), display: false)
+        panel.displayIfNeeded()
+        onResized?(newWidth, newHeight)
     }
 }
 
 // MARK: - EdgeResizeView (left/right edge drag to resize width)
 
 final class EdgeResizeView: NSView {
-    enum Edge { case left, right }
+    enum Edge { case left, right, bottom }
     private let edge: Edge
     private weak var targetPanel: NSPanel?
     private var startLocation: NSPoint = .zero
     private var startFrame: NSRect = .zero
+    var onResized: ((CGFloat, CGFloat) -> Void)?
 
     init(edge: Edge, panel: NSPanel) {
         self.edge = edge
@@ -1349,7 +1521,10 @@ final class EdgeResizeView: NSView {
     }
 
     override func cursorUpdate(with event: NSEvent) {
-        NSCursor.resizeLeftRight.set()
+        switch edge {
+        case .left, .right: NSCursor.resizeLeftRight.set()
+        case .bottom:       NSCursor.resizeUpDown.set()
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -1359,7 +1534,9 @@ final class EdgeResizeView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let panel = targetPanel else { return }
-        let dx = NSEvent.mouseLocation.x - startLocation.x
+        let mouse = NSEvent.mouseLocation
+        let dx = mouse.x - startLocation.x
+        let dy = mouse.y - startLocation.y
         switch edge {
         case .right:
             let newW = max(320, startFrame.width + dx)
@@ -1370,6 +1547,14 @@ final class EdgeResizeView: NSView {
             let newX = startFrame.maxX - newW
             panel.setFrame(NSRect(x: newX, y: panel.frame.origin.y,
                                   width: newW, height: panel.frame.height), display: true)
+        case .bottom:
+            let newH = max(200, startFrame.height - dy)
+            // Keep top edge fixed: top = startFrame.maxY, newY = top - newH
+            let newY = startFrame.maxY - newH
+            panel.setFrame(NSRect(x: panel.frame.origin.x, y: newY,
+                                  width: panel.frame.width, height: newH), display: false)
+            panel.displayIfNeeded()
+            onResized?(panel.frame.width, newH)
         }
     }
 }
@@ -1798,7 +1983,7 @@ final class StoragePrefsVC: NSViewController {
         sizeInfo.translatesAutoresizingMaskIntoConstraints = false
         sizeInfo.bezelStyle = .helpButton
         sizeInfo.setButtonType(.momentaryPushIn)
-        sizeInfo.toolTip = "The number of clipboard items ClipStack will remember.\nOlder items beyond this limit are automatically removed.\n\nCurrent history file size on disk: \(diskSizeString())"
+        sizeInfo.toolTip = "The number of clipboard items Copiha will remember.\nOlder items beyond this limit are automatically removed.\n\nCurrent history file size on disk: \(diskSizeString())"
 
         sizeRow.addSubview(sizeField)
         sizeRow.addSubview(sizeStepper)
@@ -1857,7 +2042,7 @@ final class StoragePrefsVC: NSViewController {
 
     private func diskSizeString() -> String {
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first?.appendingPathComponent("ClipStack/history.json")
+            .first?.appendingPathComponent("Copiha/history.json")
         if let url, let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize {
             let mb = Double(size) / 1_048_576
             return mb < 0.1 ? "\(size) bytes" : String(format: "%.1f MB", mb)
@@ -2201,7 +2386,7 @@ final class AdvancedPrefsVC: NSViewController {
         sep4.widthAnchor.constraint(equalToConstant: 280).isActive = true
 
         // Privacy note
-        let privacyNote = NSTextField(wrappingLabelWithString: "🔒  ClipStack stores your clipboard history locally on this Mac only. No data is ever sent to any server. The only network request made is an optional update check to GitHub.")
+        let privacyNote = NSTextField(wrappingLabelWithString: "🔒  Copiha stores your clipboard history locally on this Mac only. No data is ever sent to any server. The only network request made is an optional update check to GitHub.")
         privacyNote.font = NSFont.systemFont(ofSize: 11)
         privacyNote.textColor = .secondaryLabelColor
         privacyNote.translatesAutoresizingMaskIntoConstraints = false
@@ -2224,12 +2409,12 @@ final class AdvancedPrefsVC: NSViewController {
     }
 
     @objc private func showLog() {
-        NSWorkspace.shared.activateFileViewerSelecting([clipStackLogFileURL()])
+        NSWorkspace.shared.activateFileViewerSelecting([copihaLogFileURL()])
     }
 
     @objc private func copyLogPath() {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(clipStackLogFileURL().path, forType: .string)
+        NSPasteboard.general.setString(copihaLogFileURL().path, forType: .string)
     }
 }
 
@@ -2347,7 +2532,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        win.title = "Welcome to ClipStack"
+        win.title = "Welcome to Copiha"
         win.isReleasedWhenClosed = false
         win.center()
         self.init(window: win)
@@ -2381,13 +2566,13 @@ final class OnboardingVC: NSViewController {
         iconView.imageScaling = .scaleProportionallyUpOrDown
         iconView.translatesAutoresizingMaskIntoConstraints = false
 
-        let titleLabel = NSTextField(labelWithString: "Welcome to ClipStack")
+        let titleLabel = NSTextField(labelWithString: "Welcome to Copiha")
         titleLabel.font = NSFont.systemFont(ofSize: 20, weight: .semibold)
         titleLabel.alignment = .center
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
 
         let subtitleLabel = NSTextField(wrappingLabelWithString:
-            "ClipStack lives in your menu bar and keeps a history of everything you copy.")
+            "Copiha lives in your menu bar and keeps a history of everything you copy.")
         subtitleLabel.font = NSFont.systemFont(ofSize: 13)
         subtitleLabel.textColor = .secondaryLabelColor
         subtitleLabel.alignment = .center
@@ -2400,12 +2585,12 @@ final class OnboardingVC: NSViewController {
         let step1 = makeStep(
             symbol: "keyboard",
             title: "Open with a hotkey",
-            detail: "Press \(hotkeyStr) at any time to open ClipStack and browse your clipboard history.")
+            detail: "Press \(hotkeyStr) at any time to open Copiha and browse your clipboard history.")
 
         let step2 = makeStep(
             symbol: "lock.shield",
             title: "Grant Accessibility access",
-            detail: "ClipStack needs Accessibility permission to paste items automatically into other apps.")
+            detail: "Copiha needs Accessibility permission to paste items automatically into other apps.")
 
         let grantBtn = NSButton(title: "Open Accessibility Settings", target: self, action: #selector(openAccessibility))
         grantBtn.bezelStyle = .rounded

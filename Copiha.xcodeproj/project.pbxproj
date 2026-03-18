@@ -26,7 +26,7 @@
 		FA05 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		FA06 /* StatusIcon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = StatusIcon.png; sourceTree = "<group>"; };
 		FA07 /* StatusIcon@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "StatusIcon@2x.png"; sourceTree = "<group>"; };
-		FAAPP /* ClipStack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipStack.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		FAAPP /* Copiha.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Copiha.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -41,13 +41,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		GRPMAIN /* ClipStack */ = {
+		GRPMAIN /* Copiha */ = {
 			isa = PBXGroup;
 			children = (
 				GRPAPP /* App */,
 				GRPRES /* Resources */,
 			);
-			path = ClipStack;
+			path = Copiha;
 			sourceTree = "<group>";
 		};
 		GRPAPP /* App */ = {
@@ -74,7 +74,7 @@
 		GRPROOT /* root */ = {
 			isa = PBXGroup;
 			children = (
-				GRPMAIN /* ClipStack */,
+				GRPMAIN /* Copiha */,
 				GRPPROD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -82,7 +82,7 @@
 		GRPPROD /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				FAAPP /* ClipStack.app */,
+				FAAPP /* Copiha.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -90,9 +90,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		TGTMAIN /* ClipStack */ = {
+		TGTMAIN /* Copiha */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = CFGLIST /* Build configuration list for PBXNativeTarget "ClipStack" */;
+			buildConfigurationList = CFGLIST /* Build configuration list for PBXNativeTarget "Copiha" */;
 			buildPhases = (
 				BPSRC /* Sources */,
 				BPFWK /* Frameworks */,
@@ -102,9 +102,9 @@
 			);
 			dependencies = (
 			);
-			name = ClipStack;
-			productName = ClipStack;
-			productReference = FAAPP /* ClipStack.app */;
+			name = Copiha;
+			productName = Copiha;
+			productReference = FAAPP /* Copiha.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -116,7 +116,7 @@
 				LastSwiftUpdateCheck = 1500;
 				LastUpgradeCheck = 1500;
 			};
-			buildConfigurationList = PROJCFGLIST /* Build configuration list for PBXProject "ClipStack" */;
+			buildConfigurationList = PROJCFGLIST /* Build configuration list for PBXProject "Copiha" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -129,7 +129,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				TGTMAIN /* ClipStack */,
+				TGTMAIN /* Copiha */,
 			);
 		};
 /* End PBXProject section */
@@ -179,10 +179,10 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
-				INFOPLIST_FILE = ClipStack/Resources/Info.plist;
+				INFOPLIST_FILE = Copiha/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.clipstack.app";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.copiha.app";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -200,10 +200,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				INFOPLIST_FILE = ClipStack/Resources/Info.plist;
+				INFOPLIST_FILE = Copiha/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.clipstack.app";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.copiha.app";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -233,7 +233,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		CFGLIST /* Build configuration list for PBXNativeTarget "ClipStack" */ = {
+		CFGLIST /* Build configuration list for PBXNativeTarget "Copiha" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				CFG_DEBUG /* Debug */,
@@ -242,7 +242,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		PROJCFGLIST /* Build configuration list for PBXProject "ClipStack" */ = {
+		PROJCFGLIST /* Build configuration list for PBXProject "Copiha" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				PROJCFG_DEBUG /* Debug */,

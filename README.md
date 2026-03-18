@@ -1,4 +1,4 @@
-# ClipStack
+# Copiha
 
 A fast, native macOS clipboard manager that lives in your menu bar.
 
@@ -26,17 +26,17 @@ A fast, native macOS clipboard manager that lives in your menu bar.
 
 ### Option 1 — Download (recommended)
 
-1. Go to [Releases](https://github.com/ayoubahb/ClipStack/releases/latest)
-2. Download `ClipStack.dmg`
-3. Open the DMG, drag ClipStack to Applications
-4. Launch ClipStack — grant Accessibility permission when prompted
+1. Go to [Releases](https://github.com/ayoubahb/Copiha/releases/latest)
+2. Download `Copiha.dmg`
+3. Open the DMG, drag Copiha to Applications
+4. Launch Copiha — grant Accessibility permission when prompted
 
 ### Option 2 — Build from source
 
 ```bash
-git clone https://github.com/ayoubahb/ClipStack.git
-cd ClipStack
-xcodebuild -scheme ClipStack -configuration Release build
+git clone https://github.com/ayoubahb/Copiha.git
+cd Copiha
+xcodebuild -scheme Copiha -configuration Release build
 ```
 
 ---
@@ -45,7 +45,7 @@ xcodebuild -scheme ClipStack -configuration Release build
 
 | Action | Shortcut |
 |---|---|
-| Open ClipStack | ⌘⇧V (customizable in Preferences) |
+| Open Copiha | ⌘⇧V (customizable in Preferences) |
 | Paste item | Click or Enter |
 | Quick paste (first 9) | ⌘1 – ⌘9 |
 | Navigate list | ↑ / ↓ arrow keys |
@@ -59,7 +59,7 @@ xcodebuild -scheme ClipStack -configuration Release build
 
 ## Permissions
 
-ClipStack requires **Accessibility** permission to simulate ⌘V after you select an item. Without it, the item is still copied to your clipboard but not pasted automatically.
+Copiha requires **Accessibility** permission to simulate ⌘V after you select an item. Without it, the item is still copied to your clipboard but not pasted automatically.
 
 Grant access in: **System Settings → Privacy & Security → Accessibility**
 
@@ -67,14 +67,14 @@ Grant access in: **System Settings → Privacy & Security → Accessibility**
 
 ## Privacy
 
-ClipStack stores your clipboard history **locally on your Mac only** — in `~/Library/Application Support/ClipStack/history.json`. No data is ever sent to any server. The only outbound request is an optional update check against the GitHub releases API.
+Copiha stores your clipboard history **locally on your Mac only** — in `~/Library/Application Support/Copiha/history.json`. No data is ever sent to any server. The only outbound request is an optional update check against the GitHub releases API.
 
 ---
 
 ## Reporting bugs
 
 1. Open **Preferences → Advanced → Show Log in Finder**
-2. Attach `clipstack.log` to your [GitHub issue](https://github.com/ayoubahb/ClipStack/issues/new)
+2. Attach `copiha.log` to your [GitHub issue](https://github.com/ayoubahb/Copiha/issues/new)
 
 ---
 

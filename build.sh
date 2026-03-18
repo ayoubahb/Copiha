@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-SCHEME="ClipStack"
+SCHEME="Copiha"
 CONFIG="Release"
-ARCHIVE_PATH="build/ClipStack.xcarchive"
+ARCHIVE_PATH="build/Copiha.xcarchive"
 EXPORT_PATH="build/"
 
-echo "Building ClipStack..."
+echo "Building Copiha..."
 
 xcodebuild \
   -scheme "$SCHEME" \
@@ -22,19 +22,19 @@ xcodebuild \
   -exportPath "$EXPORT_PATH" \
   -exportOptionsPlist ExportOptions.plist
 
-echo "Build complete: build/ClipStack.app"
+echo "Build complete: build/Copiha.app"
 
 # Optional: create DMG (requires create-dmg: brew install create-dmg)
 if command -v create-dmg &> /dev/null; then
   echo "Creating DMG..."
   create-dmg \
-    --volname "ClipStack" \
+    --volname "Copiha" \
     --window-pos 200 120 \
     --window-size 600 400 \
     --icon-size 100 \
-    --icon "ClipStack.app" 175 190 \
+    --icon "Copiha.app" 175 190 \
     --app-drop-link 425 190 \
-    "build/ClipStack.dmg" \
-    "build/ClipStack.app"
-  echo "DMG created: build/ClipStack.dmg"
+    "build/Copiha.dmg" \
+    "build/Copiha.app"
+  echo "DMG created: build/Copiha.dmg"
 fi
