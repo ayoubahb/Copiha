@@ -21,3 +21,6 @@ build/
 *.ipa
 *.dSYM
 *.dSYM.zip
+
+# Distribution
+dist/
