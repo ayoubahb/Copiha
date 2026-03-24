@@ -737,9 +737,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showAbout() {
         hidePanel()
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.1"
+        let year = Calendar.current.component(.year, from: Date())
         let alert = NSAlert()
         alert.messageText = "Copiha"
-        alert.informativeText = "Version \(version)\n\nA lightweight clipboard manager for macOS.\nStores your clipboard history locally — no data ever leaves your Mac.\n\n© 2025 Copiha"
+        alert.informativeText = "Version \(version)\n\nA lightweight clipboard manager for macOS.\nStores your clipboard history locally — no data ever leaves your Mac.\n\n© \(year) Ayoubahb"
         alert.icon = NSImage(named: NSImage.applicationIconName)
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "View on GitHub")
