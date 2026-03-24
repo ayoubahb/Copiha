@@ -844,9 +844,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let contentView = self.panel.contentView else { return event }
                 let point = contentView.convert(event.locationInWindow, from: nil)
                 var newHoveredIndex: Int? = nil
+                let scrollVisibleRect = self.scrollView.convert(self.scrollView.bounds, to: contentView)
                 for view in self.allHoverViews {
                     let frame = view.convert(view.bounds, to: contentView)
-                    let hovered = frame.contains(point)
+                    // For item rows, clip to the scroll view's visible area so off-screen items
+                    // below the footer don't register as hovered
+                    let hitFrame = view.debugLabel.hasPrefix("item-")
+                        ? frame.intersection(scrollVisibleRect)
+                        : frame
+                    let hovered = !hitFrame.isNull && hitFrame.contains(point)
                     if hovered != view.isHovered {
                         view.isHovered = hovered
                         view.setHighlight(hovered)
