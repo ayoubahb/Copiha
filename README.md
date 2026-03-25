@@ -3,6 +3,7 @@
 A fast, native macOS clipboard manager that lives in your menu bar.
 
 ![macOS](https://img.shields.io/badge/macOS-13.0%2B-blue)
+![Universal](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-Universal-brightgreen)
 ![Swift](https://img.shields.io/badge/Swift-5.0-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![GitHub](https://img.shields.io/badge/GitHub-ayoubahb-black)
@@ -27,7 +28,7 @@ A fast, native macOS clipboard manager that lives in your menu bar.
 ### Option 1 — Download (recommended)
 
 1. Go to [Releases](https://github.com/ayoubahb/Copiha/releases/latest)
-2. Download `Copiha.dmg`
+2. Download `Copiha.dmg` — universal build, works on both Apple Silicon and Intel Macs
 3. Open the DMG, drag Copiha to Applications
 4. Launch Copiha — grant Accessibility permission when prompted
 
