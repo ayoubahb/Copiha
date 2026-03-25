@@ -143,7 +143,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         log("=== Copiha launched ===")
-        requestAccessibilityIfNeeded()
         clipboardItems = Store.shared.load()
         applyTTL()
         setupPanel()
@@ -153,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupGlobalHotkey()
         showOnboardingIfNeeded()
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { self.checkForUpdates() }
+        // Note: Accessibility is only requested when the user enables auto-paste or via onboarding
     }
 
     private func applyTTL() {
@@ -1000,7 +1000,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Write to clipboard
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        let fileURLs = text.components(separatedBy: "\n")
+            .compactMap { URL(string: $0) }
+            .filter { $0.scheme == "file" }
+        if !fileURLs.isEmpty {
+            NSPasteboard.general.writeObjects(fileURLs as [NSURL])
+        } else {
+            NSPasteboard.general.setString(text, forType: .string)
+        }
         lastChangeCount = NSPasteboard.general.changeCount  // ignore our own write
 
         hidePanel()
@@ -1088,17 +1095,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lastChangeCount = current
 
         guard !Prefs.shared.isPaused else { return }
-        guard Prefs.shared.saveText else { return }
+
         // Check ignored apps
         let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         let inList = Prefs.shared.ignoredBundleIDs.contains(frontmost)
         let shouldIgnore = Prefs.shared.ignoreAllExcept ? !inList : inList
         if shouldIgnore { log("Ignored app: \(frontmost)"); return }
+
+        // File URLs (copies from Finder)
+        if Prefs.shared.saveFiles,
+           let urls = pb.readObjects(forClasses: [NSURL.self],
+                                     options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           !urls.isEmpty {
+            let text = urls.map { $0.absoluteString }.joined(separator: "\n")
+            addToHistory(text)
+            return
+        }
+
+        // Plain text
+        guard Prefs.shared.saveText else { return }
         guard let text = pb.string(forType: .string),
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             log("No plain text")
             return
         }
+        addToHistory(text)
+    }
+
+    private func addToHistory(_ text: String) {
         let now = Date()
         if let idx = clipboardItems.firstIndex(where: { $0.text == text }) {
             var item = clipboardItems.remove(at: idx)
@@ -1829,6 +1853,8 @@ private func prefsSeparator() -> NSBox {
 // MARK: - General tab
 
 final class GeneralPrefsVC: NSViewController {
+    private var pasteAutoCheck: NSButton!
+
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 320))
     }
@@ -1890,8 +1916,9 @@ final class GeneralPrefsVC: NSViewController {
         sep3.widthAnchor.constraint(equalToConstant: 280).isActive = true
 
         // Paste automatically
-        let pasteAutoCheck = NSButton(checkboxWithTitle: "Paste automatically", target: self, action: #selector(pasteAutoToggled(_:)))
-        pasteAutoCheck.state = Prefs.shared.pasteAutomatically ? .on : .off
+        pasteAutoCheck = NSButton(checkboxWithTitle: "Paste automatically  (requires Accessibility)", target: self, action: #selector(pasteAutoToggled(_:)))
+        pasteAutoCheck.state = Prefs.shared.pasteAutomatically && AXIsProcessTrusted() ? .on : .off
+        if pasteAutoCheck.state == .off { Prefs.shared.pasteAutomatically = false }
         grid.addRow(with: [prefsLabel("Behavior:"), pasteAutoCheck])
 
         // Paste without formatting
@@ -1910,7 +1937,37 @@ final class GeneralPrefsVC: NSViewController {
     @objc private func searchModeChanged(_ s: NSPopUpButton) {
         Prefs.shared.searchMode = s.titleOfSelectedItem == "Exact" ? .exact : .fuzzy
     }
-    @objc private func pasteAutoToggled(_ s: NSButton)  { Prefs.shared.pasteAutomatically = s.state == .on }
+
+    @objc private func pasteAutoToggled(_ s: NSButton) {
+        guard s.state == .on else {
+            Prefs.shared.pasteAutomatically = false
+            return
+        }
+        if AXIsProcessTrusted() {
+            Prefs.shared.pasteAutomatically = true
+        } else {
+            // Request permission and poll — uncheck until granted
+            s.state = .off
+            Prefs.shared.pasteAutomatically = false
+            let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true]
+            AXIsProcessTrustedWithOptions(opts as CFDictionary)
+            pollAccessibility(attempts: 0)
+        }
+    }
+
+    private func pollAccessibility(attempts: Int) {
+        guard attempts < 20 else { return }  // give up after ~10 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            if AXIsProcessTrusted() {
+                self.pasteAutoCheck.state = .on
+                Prefs.shared.pasteAutomatically = true
+            } else {
+                self.pollAccessibility(attempts: attempts + 1)
+            }
+        }
+    }
+
     @objc private func pasteFormatToggled(_ s: NSButton){ Prefs.shared.pasteWithoutFormatting = s.state == .on }
 }
 
@@ -2534,7 +2591,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     convenience init() {
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 520),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -2562,7 +2619,7 @@ final class OnboardingVC: NSViewController {
     var onDismiss: (() -> Void)?
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 420))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 520))
     }
 
     override func viewDidLoad() {
@@ -2596,47 +2653,63 @@ final class OnboardingVC: NSViewController {
 
         let step2 = makeStep(
             symbol: "lock.shield",
-            title: "Grant Accessibility access",
-            detail: "Copiha needs Accessibility permission to paste items automatically into other apps.")
+            title: "Optional: Auto-paste",
+            detail: "When you pick an item, Copiha switches back to your previous app and simulates ⌘V — so it only works when a text field is focused. Requires Accessibility permission. You can enable it now or later in Preferences → General.")
 
-        let grantBtn = NSButton(title: "Open Accessibility Settings", target: self, action: #selector(openAccessibility))
+        let grantBtn = NSButton(title: "Enable Auto-paste", target: self, action: #selector(openAccessibility))
         grantBtn.bezelStyle = .rounded
         grantBtn.translatesAutoresizingMaskIntoConstraints = false
+
+        // Divider above buttons
+        let divider = NSBox()
+        divider.boxType = .separator
+        divider.translatesAutoresizingMaskIntoConstraints = false
 
         let startBtn = NSButton(title: "Get Started", target: self, action: #selector(getStarted))
         startBtn.bezelStyle = .rounded
         startBtn.keyEquivalent = "\r"
         startBtn.translatesAutoresizingMaskIntoConstraints = false
 
-        [iconView, titleLabel, subtitleLabel, step1, step2, grantBtn, startBtn].forEach { view.addSubview($0) }
+        [iconView, titleLabel, subtitleLabel, step1, step2, grantBtn, divider, startBtn].forEach { view.addSubview($0) }
 
         NSLayoutConstraint.activate([
-            iconView.topAnchor.constraint(equalTo: view.topAnchor, constant: 30),
+            // Icon at top
+            iconView.topAnchor.constraint(equalTo: view.topAnchor, constant: 28),
             iconView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 72),
-            iconView.heightAnchor.constraint(equalToConstant: 72),
+            iconView.widthAnchor.constraint(equalToConstant: 64),
+            iconView.heightAnchor.constraint(equalToConstant: 64),
 
-            titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 14),
+            // Title
+            titleLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 12),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            // Subtitle
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 6),
             subtitleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             subtitleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
 
-            step1.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 24),
+            // Steps
+            step1.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 20),
             step1.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             step1.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
 
-            step2.topAnchor.constraint(equalTo: step1.bottomAnchor, constant: 16),
+            step2.topAnchor.constraint(equalTo: step1.bottomAnchor, constant: 14),
             step2.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
             step2.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
 
-            grantBtn.topAnchor.constraint(equalTo: step2.bottomAnchor, constant: 24),
+            // Accessibility button below step2
+            grantBtn.topAnchor.constraint(equalTo: step2.bottomAnchor, constant: 16),
             grantBtn.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            startBtn.topAnchor.constraint(equalTo: grantBtn.bottomAnchor, constant: 10),
+            // Divider pinned to bottom area
+            divider.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            divider.bottomAnchor.constraint(equalTo: startBtn.topAnchor, constant: -14),
+
+            // Get Started always pinned to bottom
+            startBtn.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
             startBtn.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            startBtn.widthAnchor.constraint(equalToConstant: 120),
+            startBtn.widthAnchor.constraint(equalToConstant: 140),
         ])
     }
 
@@ -2679,9 +2752,8 @@ final class OnboardingVC: NSViewController {
     }
 
     @objc private func openAccessibility() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+        let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true]
+        AXIsProcessTrustedWithOptions(opts as CFDictionary)
     }
 
     @objc private func getStarted() {
