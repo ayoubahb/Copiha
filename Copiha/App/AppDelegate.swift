@@ -120,15 +120,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return qi == q.endIndex
     }
 
-    private var panelWidth: CGFloat = 500
+    private var panelWidth: CGFloat = 420
     private var userPanelHeight: CGFloat? = nil  // nil = auto from item count
     private let defaultVisibleRows: Int = 8
-    private let rowHeight: CGFloat = 30
-    private let headerHeight: CGFloat = 44
-    private let footerRowHeight: CGFloat = 24
-    private let footerCount: Int = 5
+    private let rowHeight: CGFloat = 34
+    private let headerHeight: CGFloat = 52
+    private let footerRowHeight: CGFloat = 60
+    private let footerCount: Int = 1
     private let maxVisibleRows: Int = 12
-    private var footerHeight: CGFloat { CGFloat(footerCount) * footerRowHeight }
+    private var footerHeight: CGFloat { footerRowHeight + 1 }
 
     func applicationWillTerminate(_ notification: Notification) {
         if Prefs.shared.clearHistoryOnQuit {
@@ -353,20 +353,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = PanelRootView()                 // custom root to forward resize
         root.wantsLayer = true
-        root.layer?.cornerRadius = 10
+        root.layer?.cornerRadius = 16
         root.layer?.masksToBounds = true
 
-        let effect = NSVisualEffectView()
-        effect.material = .menu
-        effect.blendingMode = .behindWindow
-        effect.state = .active
-        effect.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(effect)
+        let bg = NSView()
+        bg.wantsLayer = true
+        bg.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        bg.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(bg)
         NSLayoutConstraint.activate([
-            effect.topAnchor.constraint(equalTo: root.topAnchor),
-            effect.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            effect.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            effect.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            bg.topAnchor.constraint(equalTo: root.topAnchor),
+            bg.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            bg.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            bg.trailingAnchor.constraint(equalTo: root.trailingAnchor),
         ])
 
         panel.contentView = root
@@ -381,7 +380,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Header
 
     private func buildHeader(in parent: NSView) {
-        // Draggable header background
         let dragArea = DragHeaderView()
         dragArea.translatesAutoresizingMaskIntoConstraints = false
         parent.addSubview(dragArea)
@@ -392,9 +390,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dragArea.heightAnchor.constraint(equalToConstant: headerHeight),
         ])
 
-        let title = LabelView.make("Copiha")
-        title.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
-        title.textColor = .secondaryLabelColor
+        // Pill container
+        let pill = NSView()
+        pill.wantsLayer = true
+        pill.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.06).cgColor
+        pill.layer?.cornerRadius = 8
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        parent.addSubview(pill)
 
         searchIcon = NSImageView()
         searchIcon.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
@@ -402,7 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         searchIcon.translatesAutoresizingMaskIntoConstraints = false
 
         searchField = NSTextField()
-        searchField.placeholderString = "type to search…"
+        searchField.placeholderString = "Search…"
         searchField.isBordered = false
         searchField.drawsBackground = false
         searchField.font = NSFont.systemFont(ofSize: 13)
@@ -410,23 +412,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.delegate = self
 
+        pill.addSubview(searchIcon)
+        pill.addSubview(searchField)
+
         let divider = NSBox()
         divider.boxType = .separator
         divider.translatesAutoresizingMaskIntoConstraints = false
+        parent.addSubview(divider)
 
-        [title, searchIcon, searchField, divider].forEach { parent.addSubview($0) }
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 14),
-            title.centerYAnchor.constraint(equalTo: parent.topAnchor, constant: headerHeight / 2),
+            pill.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 12),
+            pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -12),
+            pill.centerYAnchor.constraint(equalTo: parent.topAnchor, constant: headerHeight / 2),
+            pill.heightAnchor.constraint(equalToConstant: 28),
 
-            searchIcon.leadingAnchor.constraint(equalTo: title.trailingAnchor, constant: 8),
-            searchIcon.centerYAnchor.constraint(equalTo: title.centerYAnchor),
-            searchIcon.widthAnchor.constraint(equalToConstant: 14),
-            searchIcon.heightAnchor.constraint(equalToConstant: 14),
+            searchIcon.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 8),
+            searchIcon.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+            searchIcon.widthAnchor.constraint(equalToConstant: 13),
+            searchIcon.heightAnchor.constraint(equalToConstant: 13),
 
-            searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 4),
-            searchField.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -14),
-            searchField.centerYAnchor.constraint(equalTo: title.centerYAnchor),
+            searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 6),
+            searchField.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -8),
+            searchField.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
 
             divider.topAnchor.constraint(equalTo: parent.topAnchor, constant: headerHeight),
             divider.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
@@ -489,9 +496,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildFooter(in parent: NSView) {
         footerViews.removeAll()
-        // top divider separating list from footer
-        let topDivider = NSBox()
-        topDivider.boxType = .separator
+
+        // subtle top divider
+        let topDivider = NSView()
+        topDivider.wantsLayer = true
+        topDivider.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.4).cgColor
         topDivider.translatesAutoresizingMaskIntoConstraints = false
         parent.addSubview(topDivider)
         footerViews.append(topDivider)
@@ -502,65 +511,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             topDivider.heightAnchor.constraint(equalToConstant: 1),
         ])
 
+        // icon-only horizontal bar
+        let bar = HoverView()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        bar.isFooter = false   // handled per-button via individual HoverViews below
+        parent.addSubview(bar)
+        footerViews.append(bar)
+        NSLayoutConstraint.activate([
+            bar.topAnchor.constraint(equalTo: topDivider.bottomAnchor),
+            bar.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
+            bar.heightAnchor.constraint(equalToConstant: footerRowHeight),
+        ])
+
         let footerItems: [(String, String, String, Selector)] = [
-            ("Clear all",    "trash",                  "⌥⇧⌘⌫", #selector(clearAll)),
-            ("Reset size",   "arrow.counterclockwise", "⌘0",    #selector(resetPanelSize)),
-            ("Preferences…", "gear",                  "⌘,",    #selector(openPreferences)),
-            ("About",        "info.circle",            "⌘I",    #selector(showAbout)),
-            ("Quit",         "power",                  "⌘Q",    #selector(quitApp)),
+            ("trash",                  "Clear",        "⌥⇧⌘⌫", #selector(clearAll)),
+            ("arrow.counterclockwise", "Reset",        "⌘0",    #selector(resetPanelSize)),
+            ("gear",                   "Preferences",  "⌘,",    #selector(openPreferences)),
+            ("info.circle",            "About",        "⌘I",    #selector(showAbout)),
+            ("power",                  "Quit",         "⌘Q",    #selector(quitApp)),
         ]
 
-        // Build rows top-to-bottom anchored from topDivider downward
-        var topAnchor = topDivider.bottomAnchor
-
-        for (index, (title, symbol, shortcut, action)) in footerItems.enumerated() {
-            let row = HoverView()
-            row.translatesAutoresizingMaskIntoConstraints = false
-            row.isFooter = true
+        var prevAnchor = bar.leadingAnchor
+        for (symbol, title, shortcut, action) in footerItems {
+            let btn = HoverView()
+            btn.translatesAutoresizingMaskIntoConstraints = false
+            btn.isFooter = true
 
             let icon = NSImageView()
-            icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
             icon.contentTintColor = .secondaryLabelColor
             icon.translatesAutoresizingMaskIntoConstraints = false
-            icon.setContentHuggingPriority(.required, for: .horizontal)
 
-            let label = LabelView.make(title)
-            label.font = NSFont.systemFont(ofSize: 12)
-            label.textColor = .secondaryLabelColor
+            let titleLabel = LabelView.make(title)
+            titleLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+            titleLabel.textColor = .secondaryLabelColor
+            titleLabel.alignment = .center
 
-            let hint = LabelView.make(shortcut)
-            hint.font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
-            hint.textColor = .tertiaryLabelColor
+            let shortcutLabel = LabelView.make(shortcut)
+            shortcutLabel.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .regular)
+            shortcutLabel.textColor = .secondaryLabelColor
+            shortcutLabel.alignment = .center
 
-            row.addSubview(icon)
-            row.addSubview(label)
-            row.addSubview(hint)
-            parent.addSubview(row)
+            btn.addSubview(icon)
+            btn.addSubview(titleLabel)
+            btn.addSubview(shortcutLabel)
+            bar.addSubview(btn)
 
             NSLayoutConstraint.activate([
-                row.topAnchor.constraint(equalTo: topAnchor),
-                row.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
-                row.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
-                row.heightAnchor.constraint(equalToConstant: footerRowHeight),
-                icon.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 14),
-                icon.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-                icon.widthAnchor.constraint(equalToConstant: 14),
-                icon.heightAnchor.constraint(equalToConstant: 14),
-                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 7),
-                label.centerYAnchor.constraint(equalTo: row.centerYAnchor),
-                hint.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -14),
-                hint.centerYAnchor.constraint(equalTo: row.centerYAnchor),
+                btn.topAnchor.constraint(equalTo: bar.topAnchor),
+                btn.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+                btn.leadingAnchor.constraint(equalTo: prevAnchor),
+                btn.widthAnchor.constraint(equalTo: bar.widthAnchor, multiplier: 1.0 / CGFloat(footerItems.count)),
+
+                icon.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
+                icon.topAnchor.constraint(equalTo: btn.topAnchor, constant: 9),
+                icon.widthAnchor.constraint(equalToConstant: 13),
+                icon.heightAnchor.constraint(equalToConstant: 13),
+
+                titleLabel.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
+                titleLabel.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 3),
+                titleLabel.leadingAnchor.constraint(equalTo: btn.leadingAnchor, constant: 2),
+                titleLabel.trailingAnchor.constraint(equalTo: btn.trailingAnchor, constant: -2),
+
+                shortcutLabel.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
+                shortcutLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 1),
+                shortcutLabel.leadingAnchor.constraint(equalTo: btn.leadingAnchor, constant: 2),
+                shortcutLabel.trailingAnchor.constraint(equalTo: btn.trailingAnchor, constant: -2),
             ])
 
             let sel = action
-            row.debugLabel = "footer-\(title)"
-            row.onClicked = { [weak self] in self?.perform(sel) }
-            allHoverViews.append(row)
-            footerViews.append(row)
+            btn.debugLabel = "footer-\(title)"
+            btn.onClicked = { [weak self] in self?.perform(sel) }
+            allHoverViews.append(btn)
+            footerViews.append(btn)
 
-            topAnchor = row.bottomAnchor
-
-            _ = index // no separators between footer rows
+            prevAnchor = btn.trailingAnchor
         }
     }
 
@@ -571,7 +597,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         handle.translatesAutoresizingMaskIntoConstraints = false
         handle.onResized = { [weak self] _, newHeight in
             self?.userPanelHeight = newHeight
-            self?.panelWidth = self?.panel.frame.width ?? 500
+            self?.panelWidth = self?.panel.frame.width ?? 420
         }
         parent.addSubview(handle)
         NSLayoutConstraint.activate([
@@ -634,13 +660,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             row.heightAnchor.constraint(equalToConstant: rowHeight).isActive = true
 
             if index < filteredItems.count - 1 {
-                let sep = NSBox()
-                sep.boxType = .separator
-                sep.translatesAutoresizingMaskIntoConstraints = false
-                itemsStack.addArrangedSubview(sep)
-                sep.leadingAnchor.constraint(equalTo: itemsStack.leadingAnchor, constant: 14).isActive = true
-                sep.widthAnchor.constraint(equalTo: itemsStack.widthAnchor, constant: -28).isActive = true
-                sep.heightAnchor.constraint(equalToConstant: 1).isActive = true
+                let spacer = NSView()
+                spacer.translatesAutoresizingMaskIntoConstraints = false
+                itemsStack.addArrangedSubview(spacer)
+                spacer.widthAnchor.constraint(equalTo: itemsStack.widthAnchor).isActive = true
+                spacer.heightAnchor.constraint(equalToConstant: 1).isActive = true
             }
         }
 
@@ -673,10 +697,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hover.addSubview(label)
         hover.addSubview(hint)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: hover.leadingAnchor, constant: 14),
+            label.leadingAnchor.constraint(equalTo: hover.leadingAnchor, constant: 20),
             label.trailingAnchor.constraint(equalTo: hint.leadingAnchor, constant: -8),
             label.centerYAnchor.constraint(equalTo: hover.centerYAnchor),
-            hint.trailingAnchor.constraint(equalTo: hover.trailingAnchor, constant: -14),
+            hint.trailingAnchor.constraint(equalTo: hover.trailingAnchor, constant: -16),
             hint.centerYAnchor.constraint(equalTo: hover.centerYAnchor),
             hint.widthAnchor.constraint(equalToConstant: 28),
         ])
@@ -701,7 +725,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func resetPanelSize() {
         log("Reset panel size")
         userPanelHeight = nil
-        panelWidth = 500
+        panelWidth = 420
         resizePanel()
         var frame = panel.frame
         frame.size.width = panelWidth
@@ -1450,21 +1474,13 @@ final class HoverView: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    private static let itemHighlight        = NSColor.systemBlue.withAlphaComponent(0.85)
-    private static let itemHighlightPressed = NSColor.systemBlue.withAlphaComponent(0.65)
-    private static let footerHighlight      = NSColor.labelColor.withAlphaComponent(0.1)
-    private static let footerHighlightPressed = NSColor.labelColor.withAlphaComponent(0.18)
+    private static let itemHighlight        = NSColor.labelColor.withAlphaComponent(0.08)
+    private static let itemHighlightPressed = NSColor.labelColor.withAlphaComponent(0.14)
+    private static let footerHighlight      = NSColor.labelColor.withAlphaComponent(0.08)
+    private static let footerHighlightPressed = NSColor.labelColor.withAlphaComponent(0.14)
 
     func setHighlight(_ on: Bool) {
-        if isFooter {
-            layer?.backgroundColor = on ? Self.footerHighlight.cgColor : NSColor.clear.cgColor
-            // footer labels keep their color on hover
-        } else {
-            layer?.backgroundColor = on ? Self.itemHighlight.cgColor : NSColor.clear.cgColor
-            subviews.compactMap { $0 as? LabelView }.forEach {
-                $0.textColor = on ? .white : .labelColor
-            }
-        }
+        layer?.backgroundColor = on ? Self.itemHighlight.cgColor : NSColor.clear.cgColor
         needsDisplay = true
     }
 
@@ -1481,7 +1497,7 @@ final class PanelRootView: NSView {
     override func layout() {
         super.layout()
         wantsLayer = true
-        layer?.cornerRadius = 10
+        layer?.cornerRadius = 16
         layer?.masksToBounds = true
     }
 }
