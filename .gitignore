@@ -24,3 +24,6 @@ build/
 
 # Distribution
 dist/
+
+# Project knowledge base (local only)
+PROJECT.md

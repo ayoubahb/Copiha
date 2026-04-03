@@ -775,6 +775,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showOnboardingIfNeeded() {
+        // If the app data directory doesn't exist this is a fresh install — always show onboarding
+        let appSupportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first!.appendingPathComponent("Copiha", isDirectory: true)
+        let dataFile = appSupportDir.appendingPathComponent("history.json")
+        if !FileManager.default.fileExists(atPath: dataFile.path) {
+            Prefs.shared.hasSeenOnboarding = false
+        }
         guard !Prefs.shared.hasSeenOnboarding else { return }
         let controller = OnboardingWindowController()
         controller.onDismiss = { [weak self] in
@@ -1195,12 +1202,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         searchField.isHidden = !showSearch
         searchIcon.isHidden = !showSearch
 
-        let showFooter = Prefs.shared.showFooter
-        footerViews.forEach { $0.isHidden = !showFooter }
+        footerViews.forEach { $0.isHidden = false }
         allHoverViews.filter { $0.debugLabel.hasPrefix("footer-") }.forEach { $0.isHovered = false }
 
-        let bottomInset: CGFloat = showFooter ? -(footerHeight + 1) : -1
-        scrollBottomConstraint.constant = bottomInset
+        scrollBottomConstraint.constant = -(footerHeight + 1)
 
         resizePanel()
     }
@@ -1732,10 +1737,6 @@ final class Prefs {
         set { UserDefaults.standard.set(newValue, forKey: "showSearchField") }
     }
 
-    var showFooter: Bool {
-        get { UserDefaults.standard.object(forKey: "showFooter") == nil ? true : UserDefaults.standard.bool(forKey: "showFooter") }
-        set { UserDefaults.standard.set(newValue, forKey: "showFooter") }
-    }
 
     var ignoredBundleIDs: [String] {
         get { UserDefaults.standard.stringArray(forKey: "ignoredBundleIDs") ?? [] }
@@ -2233,12 +2234,7 @@ final class AppearancePrefsVC: NSViewController {
         searchCheck.state = Prefs.shared.showSearchField ? .on : .off
         grid.addRow(with: [prefsLabel(""), searchCheck])
 
-        // Show footer
-        let footerCheck = NSButton(checkboxWithTitle: "Show footer", target: self, action: #selector(footerToggled(_:)))
-        footerCheck.state = Prefs.shared.showFooter ? .on : .off
-        grid.addRow(with: [NSGridCell.emptyContentView, footerCheck])
-
-        let note = NSTextField(labelWithString: "Search field and footer changes apply on next open.")
+        let note = NSTextField(labelWithString: "Search field changes apply on next open.")
         note.font = NSFont.systemFont(ofSize: 11)
         note.textColor = .secondaryLabelColor
         note.translatesAutoresizingMaskIntoConstraints = false
@@ -2259,7 +2255,6 @@ final class AppearancePrefsVC: NSViewController {
         }
     }
     @objc private func searchToggled(_ s: NSButton) { Prefs.shared.showSearchField = s.state == .on }
-    @objc private func footerToggled(_ s: NSButton) { Prefs.shared.showFooter = s.state == .on }
 }
 
 // MARK: - Ignore tab
