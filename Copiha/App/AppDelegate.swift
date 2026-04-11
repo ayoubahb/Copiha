@@ -89,6 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var selectedIndex: Int? = nil
     private var preferencesWindow: PreferencesWindow?
     private var onboardingController: OnboardingWindowController?
+    private var isPinned: Bool = false
+    private weak var pinButton: NSButton?
+    private weak var toastView: NSView?
+    private var toastWorkItem: DispatchWorkItem?
+    private weak var pauseFooterIcon: NSImageView?
+    private weak var pauseFooterLabel: NSTextField?
 
     // Search
     private var searchText: String = ""
@@ -420,9 +426,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         divider.translatesAutoresizingMaskIntoConstraints = false
         parent.addSubview(divider)
 
+        // Pin button (top-right of header) + shortcut label
+        let pinBtn = NSButton()
+        pinBtn.image = NSImage(systemSymbolName: "pin", accessibilityDescription: "Pin panel")
+        pinBtn.bezelStyle = .regularSquare
+        pinBtn.isBordered = false
+        pinBtn.contentTintColor = .secondaryLabelColor
+        pinBtn.target = self
+        pinBtn.action = #selector(togglePin)
+        pinBtn.toolTip = "Pin panel (⌘P)"
+        pinBtn.translatesAutoresizingMaskIntoConstraints = false
+        parent.addSubview(pinBtn)
+        pinButton = pinBtn
+
+        let pinShortcutLabel = NSTextField(labelWithString: "⌘P")
+        pinShortcutLabel.font = NSFont.monospacedSystemFont(ofSize: 8, weight: .regular)
+        pinShortcutLabel.textColor = .tertiaryLabelColor
+        pinShortcutLabel.alignment = .center
+        pinShortcutLabel.translatesAutoresizingMaskIntoConstraints = false
+        parent.addSubview(pinShortcutLabel)
+
         NSLayoutConstraint.activate([
             pill.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 12),
-            pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -12),
+            pill.trailingAnchor.constraint(equalTo: pinBtn.leadingAnchor, constant: -6),
             pill.centerYAnchor.constraint(equalTo: parent.topAnchor, constant: headerHeight / 2),
             pill.heightAnchor.constraint(equalToConstant: 28),
 
@@ -439,6 +465,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             divider.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
             divider.trailingAnchor.constraint(equalTo: parent.trailingAnchor),
             divider.heightAnchor.constraint(equalToConstant: 1),
+
+            pinBtn.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -10),
+            pinBtn.topAnchor.constraint(equalTo: parent.topAnchor, constant: 10),
+            pinBtn.widthAnchor.constraint(equalToConstant: 20),
+            pinBtn.heightAnchor.constraint(equalToConstant: 20),
+
+            pinShortcutLabel.centerXAnchor.constraint(equalTo: pinBtn.centerXAnchor),
+            pinShortcutLabel.topAnchor.constraint(equalTo: pinBtn.bottomAnchor, constant: 2),
         ])
     }
 
@@ -531,6 +565,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("info.circle",            "About",        "⌘I",    #selector(showAbout)),
             ("power",                  "Quit",         "⌘Q",    #selector(quitApp)),
         ]
+        let totalFooterCount = footerItems.count + 1  // +1 for pause button
 
         var prevAnchor = bar.leadingAnchor
         for (symbol, title, shortcut, action) in footerItems {
@@ -562,7 +597,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 btn.topAnchor.constraint(equalTo: bar.topAnchor),
                 btn.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
                 btn.leadingAnchor.constraint(equalTo: prevAnchor),
-                btn.widthAnchor.constraint(equalTo: bar.widthAnchor, multiplier: 1.0 / CGFloat(footerItems.count)),
+                btn.widthAnchor.constraint(equalTo: bar.widthAnchor, multiplier: 1.0 / CGFloat(totalFooterCount)),
 
                 icon.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
                 icon.topAnchor.constraint(equalTo: btn.topAnchor, constant: 9),
@@ -588,6 +623,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             prevAnchor = btn.trailingAnchor
         }
+
+        // Pause / Resume button (dynamic — stored refs for live updates)
+        let pauseBtn = HoverView()
+        pauseBtn.translatesAutoresizingMaskIntoConstraints = false
+        pauseBtn.isFooter = true
+
+        let pauseIcon = NSImageView()
+        pauseIcon.translatesAutoresizingMaskIntoConstraints = false
+
+        let pauseLabel = LabelView.make("")
+        pauseLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        pauseLabel.alignment = .center
+
+        let pauseShortcut = LabelView.make("⌘⇧P")
+        pauseShortcut.font = NSFont.monospacedSystemFont(ofSize: 10, weight: .regular)
+        pauseShortcut.textColor = .secondaryLabelColor
+        pauseShortcut.alignment = .center
+
+        pauseBtn.addSubview(pauseIcon)
+        pauseBtn.addSubview(pauseLabel)
+        pauseBtn.addSubview(pauseShortcut)
+        bar.addSubview(pauseBtn)
+
+        NSLayoutConstraint.activate([
+            pauseBtn.topAnchor.constraint(equalTo: bar.topAnchor),
+            pauseBtn.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+            pauseBtn.leadingAnchor.constraint(equalTo: prevAnchor),
+            pauseBtn.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+
+            pauseIcon.centerXAnchor.constraint(equalTo: pauseBtn.centerXAnchor),
+            pauseIcon.topAnchor.constraint(equalTo: pauseBtn.topAnchor, constant: 9),
+            pauseIcon.widthAnchor.constraint(equalToConstant: 13),
+            pauseIcon.heightAnchor.constraint(equalToConstant: 13),
+
+            pauseLabel.centerXAnchor.constraint(equalTo: pauseBtn.centerXAnchor),
+            pauseLabel.topAnchor.constraint(equalTo: pauseIcon.bottomAnchor, constant: 3),
+            pauseLabel.leadingAnchor.constraint(equalTo: pauseBtn.leadingAnchor, constant: 2),
+            pauseLabel.trailingAnchor.constraint(equalTo: pauseBtn.trailingAnchor, constant: -2),
+
+            pauseShortcut.centerXAnchor.constraint(equalTo: pauseBtn.centerXAnchor),
+            pauseShortcut.topAnchor.constraint(equalTo: pauseLabel.bottomAnchor, constant: 1),
+            pauseShortcut.leadingAnchor.constraint(equalTo: pauseBtn.leadingAnchor, constant: 2),
+            pauseShortcut.trailingAnchor.constraint(equalTo: pauseBtn.trailingAnchor, constant: -2),
+        ])
+
+        pauseFooterIcon = pauseIcon
+        pauseFooterLabel = pauseLabel
+        allHoverViews.append(pauseBtn)
+        pauseBtn.debugLabel = "footer-Pause"
+        pauseBtn.onClicked = { [weak self] in self?.togglePauseMonitoring() }
+        footerViews.append(pauseBtn)
+
+        updatePauseButton()
     }
 
     // MARK: - Resize handle
@@ -796,6 +884,114 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    // MARK: - Pin
+
+    @objc private func togglePin() {
+        isPinned.toggle()
+        updatePinButton()
+    }
+
+    private func updatePinButton() {
+        let symbol = isPinned ? "pin.fill" : "pin"
+        pinButton?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Pin panel")
+        pinButton?.contentTintColor = isPinned ? .controlAccentColor : .secondaryLabelColor
+    }
+
+    @objc private func panelDidResignKey() {
+        guard isPinned else { return }
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.25
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 0.45
+        }
+    }
+
+    @objc private func panelDidBecomeKey() {
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.15
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1.0
+        }
+    }
+
+    // MARK: - Copied toast
+
+    private func showCopiedToast() {
+        guard let root = panel.contentView else { return }
+
+        // Cancel any in-flight toast
+        toastWorkItem?.cancel()
+        toastView?.removeFromSuperview()
+
+        // --- Build toast ---
+        let toast = NSVisualEffectView()
+        toast.material = .hudWindow
+        toast.blendingMode = .withinWindow
+        toast.state = .active
+        toast.wantsLayer = true
+        toast.layer?.cornerRadius = 18
+        toast.layer?.masksToBounds = true
+        toast.translatesAutoresizingMaskIntoConstraints = false
+
+        let iconView = NSImageView()
+        let cfg = NSImage.SymbolConfiguration(pointSize: 32, weight: .medium)
+        iconView.image = NSImage(systemSymbolName: "checkmark.circle.fill",
+                                 accessibilityDescription: nil)?
+            .withSymbolConfiguration(cfg)
+        iconView.contentTintColor = .secondaryLabelColor
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = NSTextField(labelWithString: "Copied")
+        label.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        label.textColor = .labelColor
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = NSStackView(views: [iconView, label])
+        stack.orientation = .vertical
+        stack.spacing = 7
+        stack.alignment = .centerX
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        toast.addSubview(stack)
+        root.addSubview(toast)
+
+        NSLayoutConstraint.activate([
+            toast.centerXAnchor.constraint(equalTo: root.centerXAnchor),
+            toast.centerYAnchor.constraint(equalTo: root.centerYAnchor),
+            toast.widthAnchor.constraint(equalToConstant: 120),
+            toast.heightAnchor.constraint(equalToConstant: 90),
+
+            stack.centerXAnchor.constraint(equalTo: toast.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: toast.centerYAnchor),
+        ])
+
+        toastView = toast
+
+        // --- Animate in: fade items out, toast in ---
+        toast.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.18
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            toast.animator().alphaValue = 1
+            scrollView.animator().alphaValue = 0.08
+        }
+
+        // --- Animate out after hold ---
+        let workItem = DispatchWorkItem { [weak self, weak toast] in
+            guard let self, let toast else { return }
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.22
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                toast.animator().alphaValue = 0
+                self.scrollView.animator().alphaValue = 1
+            }, completionHandler: {
+                toast.removeFromSuperview()
+            })
+        }
+        toastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85, execute: workItem)
+    }
+
     // MARK: - Resize panel height
 
     private func resizePanel() {
@@ -858,11 +1054,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func toggle() {
-        isVisible ? hidePanel() : showPanel(source: .hotkey)
+        isVisible ? hidePanel(force: true) : showPanel(source: .hotkey)
     }
 
     @objc private func statusItemToggle() {
-        isVisible ? hidePanel() : showPanel(source: .statusItem)
+        isVisible ? hidePanel(force: true) : showPanel(source: .statusItem)
     }
 
     // MARK: - Local key monitor (⌘1–⌘9 while panel is open)
@@ -979,9 +1175,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return nil  // consume event
             }
-            // Escape closes panel
+            // Escape closes panel (always, even when pinned)
             if event.keyCode == 53 {
-                self.hidePanel()
+                self.hidePanel(force: true)
                 return nil
             }
             // ⌘Q — quit
@@ -996,19 +1192,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.resetPanelSize()
                 return nil
             }
+            // ⌘, — preferences
+            if event.modifierFlags.contains(.command),
+               event.keyCode == 43 {
+                self.openPreferences()
+                return nil
+            }
             // ⌘I — about
             if event.modifierFlags.contains(.command),
                event.charactersIgnoringModifiers == "i" {
                 self.showAbout()
                 return nil
             }
-            // ⌥⌫ — delete hovered item
+            // ⌘P — toggle pin
+            if event.modifierFlags.contains(.command),
+               !event.modifierFlags.contains(.shift),
+               event.charactersIgnoringModifiers?.lowercased() == "p" {
+                self.togglePin()
+                return nil
+            }
+            // ⌘⇧P — toggle pause monitoring
+            if event.modifierFlags.contains([.command, .shift]),
+               event.charactersIgnoringModifiers?.lowercased() == "p" {
+                self.togglePauseMonitoring()
+                return nil
+            }
+            // ⌥⌫ — delete selected (keyboard) or hovered (mouse) item
             if event.modifierFlags.contains(.option),
                !event.modifierFlags.contains(.command),
                !event.modifierFlags.contains(.shift),
                event.keyCode == 51 {
-                if let idx = self.hoveredItemIndex {
+                let idx = self.selectedIndex ?? self.hoveredItemIndex
+                if let idx {
                     self.deleteItem(at: idx)
+                    // Keep selection in bounds after deletion
+                    let remaining = self.filteredItems.count
+                    if remaining > 0 {
+                        self.setKeyboardSelection(min(idx, remaining - 1))
+                    } else {
+                        self.selectedIndex = nil
+                    }
                 }
                 return nil
             }
@@ -1029,6 +1252,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func pasteItem(_ text: String) {
         log("Paste: \"\(text.prefix(60))\"")
 
+        // When pinned, capture current frontmost app (previousApp may be stale)
+        if isPinned {
+            previousApp = NSWorkspace.shared.runningApplications.first {
+                $0.isActive && $0.bundleIdentifier != Bundle.main.bundleIdentifier
+            }
+        }
+
         // Write to clipboard
         NSPasteboard.general.clearContents()
         let fileURLs = text.components(separatedBy: "\n")
@@ -1041,7 +1271,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         lastChangeCount = NSPasteboard.general.changeCount  // ignore our own write
 
-        hidePanel()
+        hidePanel()  // no-op when pinned (isPinned guard inside)
+        if isPinned { showCopiedToast() }
 
         guard Prefs.shared.pasteAutomatically else {
             log("Paste automatically disabled — item copied to clipboard only")
@@ -1082,6 +1313,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.action = #selector(statusItemToggle)
         button.target = self
         updateStatusIcon()
+    }
+
+    @objc func togglePauseMonitoring() {
+        Prefs.shared.isPaused.toggle()
+        updateStatusIcon()
+        updatePauseButton()
+    }
+
+    func updatePauseButton() {
+        let paused = Prefs.shared.isPaused
+        let symbol = paused ? "play.circle" : "pause.circle"
+        let title  = paused ? "Resume" : "Pause"
+        let color: NSColor = paused ? .systemOrange : .secondaryLabelColor
+        pauseFooterIcon?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+        pauseFooterIcon?.contentTintColor = color
+        pauseFooterLabel?.stringValue = title
+        pauseFooterLabel?.textColor = color
     }
 
     func updateStatusIcon() {
@@ -1181,10 +1429,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         log("Show panel. Items: \(clipboardItems.count). Previous app: \(previousApp?.localizedName ?? "none")")
         positionPanel(source: source)
         applyAppearanceSettings()
+        panel.alphaValue = 1.0
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(Prefs.shared.showSearchField ? searchField : nil)
         isVisible = true
         startLocalMonitor()
+        NotificationCenter.default.addObserver(self, selector: #selector(panelDidResignKey),
+                                               name: NSWindow.didResignKeyNotification, object: panel)
+        NotificationCenter.default.addObserver(self, selector: #selector(panelDidBecomeKey),
+                                               name: NSWindow.didBecomeKeyNotification, object: panel)
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self else { return }
             let mouseLocation = NSEvent.mouseLocation
@@ -1210,12 +1463,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         resizePanel()
     }
 
-    private func hidePanel() {
-        log("Hide panel")
+    private func hidePanel(force: Bool = false) {
+        guard force || !isPinned else { return }
+        log("Hide panel (force: \(force))")
+        isPinned = false
+        updatePinButton()
+        panel.alphaValue = 1.0
         panel.orderOut(nil)
         isVisible = false
         if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
         stopLocalMonitor()
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: panel)
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: panel)
         hidePreviewPopup()
         hoveredItemIndex = nil
         selectedIndex = nil
@@ -1806,6 +2065,7 @@ final class Prefs {
 
 final class PreferencesWindow: NSWindowController, NSWindowDelegate, NSTabViewDelegate {
     var onClose: (() -> Void)?
+    private var keyMonitor: Any?
 
     convenience init() {
         log("PreferencesWindow init — step 1: creating tabVC")
@@ -1839,7 +2099,20 @@ final class PreferencesWindow: NSWindowController, NSWindowDelegate, NSTabViewDe
         log("PreferencesWindow init — step 5: done")
     }
 
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.modifierFlags.contains(.command),
+               event.charactersIgnoringModifiers == "w" {
+                self?.window?.close()
+                return nil
+            }
+            return event
+        }
+    }
+
     func windowWillClose(_ notification: Notification) {
+        if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         onClose?()
     }
 }
@@ -2474,7 +2747,9 @@ final class AdvancedPrefsVC: NSViewController {
 
     @objc private func pauseToggled(_ s: NSButton) {
         Prefs.shared.isPaused = s.state == .on
-        (NSApp.delegate as? AppDelegate)?.updateStatusIcon()
+        let d = NSApp.delegate as? AppDelegate
+        d?.updateStatusIcon()
+        d?.updatePauseButton()
     }
     @objc private func clearHistoryToggled(_ s: NSButton) { Prefs.shared.clearHistoryOnQuit = s.state == .on }
     @objc private func clearClipToggled(_ s: NSButton)    { Prefs.shared.clearClipboardOnQuit = s.state == .on }

@@ -16,6 +16,7 @@ A fast, native macOS clipboard manager that lives in your menu bar.
 - **Smart search** — Fuzzy or exact search across your entire history
 - **Keyboard navigation** — Arrow keys to browse, Enter to paste, ⌘1–9 for quick picks
 - **Hover preview** — See full content, copy timestamps, and copy count on hover
+- **Pin panel** — Keep the popup open while you work in other apps, with a "Copied" toast on each selection
 - **Preferences** — History size, TTL, sort order, ignored apps, appearance options
 - **Pause monitoring** — Temporarily stop recording with one click
 - **Launch at login** — Runs silently in the background
@@ -53,7 +54,8 @@ xcodebuild -scheme Copiha -configuration Release build
 | Quick paste (first 9 items) | ⌘1 – ⌘9 |
 | Navigate list | ↑ / ↓ arrow keys |
 | Search | Just start typing |
-| Delete hovered item | ⌥⌫ |
+| Pin / unpin panel | ⌘P |
+| Delete selected or hovered item | ⌥⌫ |
 | Clear all history | ⌥⇧⌘⌫ |
 | Reset panel size | ⌘0 |
 | Preferences | ⌘, |
@@ -91,7 +93,6 @@ xcodebuild -scheme Copiha -configuration Release build
 | Item preview | Show full content preview on hover |
 | Preview delay | How long before the preview appears |
 | Show search field | Toggle the search bar visibility |
-| Show footer | Toggle the footer bar (Clear, Preferences, Quit…) |
 
 ### Ignore
 Add apps whose clipboard activity you want Copiha to ignore (e.g. password managers). Copies made in those apps will not be recorded.
