@@ -91,8 +91,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingController: OnboardingWindowController?
     private var isPinned: Bool = false
     private weak var pinButton: NSButton?
+    private var panelJustBecameKey: Bool = false
     private weak var toastView: NSView?
     private var toastWorkItem: DispatchWorkItem?
+    private var suppressClipboardUntil: Date = .distantPast
     private weak var pauseFooterIcon: NSImageView?
     private weak var pauseFooterLabel: NSTextField?
 
@@ -863,13 +865,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showOnboardingIfNeeded() {
-        // If the app data directory doesn't exist this is a fresh install — always show onboarding
-        let appSupportDir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first!.appendingPathComponent("Copiha", isDirectory: true)
-        let dataFile = appSupportDir.appendingPathComponent("history.json")
-        if !FileManager.default.fileExists(atPath: dataFile.path) {
-            Prefs.shared.hasSeenOnboarding = false
-        }
         guard !Prefs.shared.hasSeenOnboarding else { return }
         let controller = OnboardingWindowController()
         controller.onDismiss = { [weak self] in
@@ -907,6 +902,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func panelDidBecomeKey() {
+        if isPinned { panelJustBecameKey = true }
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.15
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -1054,7 +1050,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func toggle() {
-        isVisible ? hidePanel(force: true) : showPanel(source: .hotkey)
+        if isVisible {
+            guard !isPinned else { return }  // pinned — hotkey does nothing
+            hidePanel(force: true)
+        } else {
+            showPanel(source: .hotkey)
+        }
     }
 
     @objc private func statusItemToggle() {
@@ -1125,6 +1126,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             // Mouse click — find which HoverView was clicked
             if event.type == .leftMouseUp {
+                // If pinned and just regained focus, absorb this click (focus-only, no action)
+                if self.panelJustBecameKey {
+                    self.panelJustBecameKey = false
+                    return nil
+                }
                 guard let contentView = self.panel.contentView else { return event }
                 let pointInContent = contentView.convert(event.locationInWindow, from: nil)
                 var hitView = contentView.hitTest(pointInContent)
@@ -1270,6 +1276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSPasteboard.general.setString(text, forType: .string)
         }
         lastChangeCount = NSPasteboard.general.changeCount  // ignore our own write
+        suppressClipboardUntil = Date().addingTimeInterval(1.0)  // suppress receiving app's clipboard response
 
         hidePanel()  // no-op when pinned (isPinned guard inside)
         if isPinned { showCopiedToast() }
@@ -1370,8 +1377,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pb = NSPasteboard.general
         let current = pb.changeCount
         guard current != lastChangeCount else { return }
-        log("Clipboard changed \(lastChangeCount)→\(current)")
         lastChangeCount = current
+        // Ignore clipboard changes caused by the receiving app responding to our paste
+        guard Date() >= suppressClipboardUntil else { return }
+        log("Clipboard changed → \(current)")
 
         guard !Prefs.shared.isPaused else { return }
 
@@ -1467,6 +1476,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard force || !isPinned else { return }
         log("Hide panel (force: \(force))")
         isPinned = false
+        panelJustBecameKey = false
         updatePinButton()
         panel.alphaValue = 1.0
         panel.orderOut(nil)
